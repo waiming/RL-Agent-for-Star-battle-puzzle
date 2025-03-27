@@ -1,5 +1,5 @@
 # RL-Agent-for-Star-battle-puzzle
-Reinforcement Learning Agent for Star battle puzzle
+Reinforcement Learning Agent for Star battle puzzle (in progress)
 
 ## Introduction
 This project trains a reinforcement learning agent using PPO to solve the 6x6, 1-star-per-row Puzzle Star Battle.
