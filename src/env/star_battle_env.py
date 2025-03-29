@@ -1,5 +1,3 @@
-# Folder: star_battle_rl/
-
 # --- File: env/star_battle_env.py ---
 import numpy as np
 import gymnasium as gym
@@ -27,36 +25,35 @@ class StarBattleEnv(gym.Env):
 
     def step(self, action):
         row, col = divmod(action, self.board_size)
-        done = False
 
-        if not is_valid_action(self.board, row, col, self.region_layout):
-            return self.board.copy(), 0, True, False, {}  # No reward for invalid move, ends episode
+        if not is_valid_action(self.board, row, col, self.region_layout, self.num_stars):
+            reward = -1.0  # Strong penalty
+            done = True    # End episode immediately
+            return self.board.copy(), reward, done, False, {"invalid_action": True}
 
-        self.board = apply_action(self.board, row, col)
+        self.board[row, col] = 1
         self.placed_stars += 1
 
-        if self.placed_stars == self.board_size:
+        reward = 0.2  # Reward for a valid placement
+        done = False
+
+        if check_win_condition(self.board, self.region_layout, self.num_stars):
+            reward += 10.0  # Bonus for winning
             done = True
-            if check_win_condition(self.board, self.region_layout):
-                reward = 1.0  # Only reward for a valid full solution
-                print("Win!✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
-            else:
-                reward = -1.0  # No win, penalize or set to 0
-        else:
-            reward = 0.0  # No reward during episode
+
+        if self.placed_stars >= self.board_size * self.num_stars:
+            done = True  # Safety net to avoid overlong episodes
 
         return self.board.copy(), reward, done, False, {}
-
-    def get_action_mask(self):
-        return generate_mask(self.board, self.region_layout)
-
+    
     def render(self):
-        display = np.full_like(self.region_layout, fill_value=".", dtype=object)
+        print("\nCurrent Board State:\t\tRegion Layout:")
         for i in range(self.board_size):
+            board_row = ""
+            region_row = ""
             for j in range(self.board_size):
-                if self.board[i, j] == 1:
-                    display[i, j] = "*"
-                else:
-                    display[i, j] = str(self.region_layout[i, j])
-        print("\n".join(" ".join(row) for row in display))
-        print("\n" + "="*20 + "\n")
+                cell = self.board[i, j]
+                board_row += "★ " if cell == 1 else ". "
+                region_row += f"{self.region_layout[i][j]} "
+            print(f"{board_row}\t\t{region_row}")
+        print("-" * 40)

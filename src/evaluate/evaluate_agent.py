@@ -1,43 +1,40 @@
 # --- File: evaluate/evaluate_agent.py ---
 import json
 import numpy as np
+import random
 from stable_baselines3 import PPO
 import torch
-from torch.nn.functional import softmax
 
 from env.star_battle_env import StarBattleEnv
+from env.star_battle_utils import generate_mask
 
-with open("puzzles/puzzles_6x6.json") as f:
-    region_layout = np.array(json.load(f))
+# Load multiple region layouts
+with open("../puzzles/puzzles_6x6_1000.json") as f:
+    region_layouts = [np.array(p) for p in json.load(f)]
 
-env = StarBattleEnv(region_layout)
-model = PPO.load("models/ppo_star_battle")
+# Load trained PPO model
+model = PPO.load("../models/ppo_star_battle")
 
+# Evaluate across N episodes
 n_eval_episodes = 5000
 wins = 0
 
 for _ in range(n_eval_episodes):
+    region_layout = random.choice(region_layouts)
+    env = StarBattleEnv(region_layout)
     obs, _ = env.reset()
     done = False
+
     while not done:
-        mask = env.get_action_mask()
-        # Get model's raw logits
-        obs_tensor = model.policy.obs_to_tensor(obs)[0]  # Convert obs to tensor
-        logits = model.policy.forward(obs_tensor)[0]     # Get raw logits (before softmax)
-        logits = logits.detach().cpu().numpy().flatten()
+        mask = generate_mask(obs, env.region_layout, env.num_stars)
+        obs_tensor = model.policy.obs_to_tensor(obs)[0]
+        logits = model.policy.forward(obs_tensor)[0].detach().cpu().numpy().flatten()
+        masked_logits = np.where(mask == 1, logits, -1e8)
+        action = np.argmax(masked_logits)
 
-        # Apply action mask
-        mask = env.get_action_mask()
-        masked_logits = np.where(mask == 1, logits, -1e8)  # Very negative number for invalid actions
+        obs, reward, done, truncated, info = env.step(action)
 
-        # Apply softmax to get probabilities (optional)
-        probs = softmax(torch.tensor(masked_logits), dim=0).numpy()
-
-        # Sample or take max (greedy)
-        action = int(np.argmax(probs))  # use np.random.choice(...) if sampling
-        obs, reward, done, _, _ = env.step(action)
-    if reward == 1:
+    if reward > 0:
         wins += 1
 
-print(f"Win rate over {n_eval_episodes} episodes: {wins / n_eval_episodes * 10000:.2f}% wins: {wins}")
-
+print(f"Win rate over {n_eval_episodes} episodes: {wins / n_eval_episodes:.2%}")
